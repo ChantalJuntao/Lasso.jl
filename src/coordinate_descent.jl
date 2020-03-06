@@ -216,15 +216,15 @@ end
 λω(λ,ω::Nothing,ipred::Int) = λ
 λω(λ,ω::Vector,ipred::Int) = λ*ω[ipred]
 
-# Performs the cycle of all predictors
-function cycle!(coef::SparseCoefficients{T}, cd::NaiveCoordinateDescent{T}, λ::T, all::Bool) where T
+# Performs the cycle of all predictors 
+function cycle!(coef::SparseCoefficients{T}, cd::NaiveCoordinateDescent{T}, λ::T, all::Bool, nonneg::Bool) where T #JC nonneg
     @extractfields cd residuals X weights Xssq α ω
 
     maxdelta = zero(T)
     @inbounds if all
         # Use all predictors for first and last iterations
         for ipred = 1:size(X, 2)
-            v = compute_grad(cd, X, residuals, weights, ipred)
+            v = compute_grad(cd, X, residuals, weights, ipred) #eq. 8 residual calculation
             λωj = λω(λ,ω,ipred)
 
             icoef = coef.predictor2coef[ipred]
@@ -242,6 +242,7 @@ function cycle!(coef::SparseCoefficients{T}, cd::NaiveCoordinateDescent{T}, λ::
                 Xssq[icoef] = computeXssq(cd, ipred)
             end
             newcoef = S(v, λωj*α)/(Xssq[icoef] + λωj*(1 - α))
+            nonneg && newcoef < 0 ? newcoef = zero(T) : nothing #JC
 
             maxdelta = max(maxdelta, update_coef!(cd, coef, newcoef, icoef, ipred))
         end
@@ -255,6 +256,7 @@ function cycle!(coef::SparseCoefficients{T}, cd::NaiveCoordinateDescent{T}, λ::
             v = Xssq[icoef]*oldcoef + compute_grad(cd, X, residuals, weights, ipred)
             λωj = λω(λ,ω,ipred)
             newcoef = S(v, λωj*α)/(Xssq[icoef] + λωj*(1 - α))
+            nonneg && newcoef < 0 ? newcoef = zero(T) : nothing #JC
 
             maxdelta = max(maxdelta, update_coef!(cd, coef, newcoef, icoef, ipred))
         end
@@ -501,7 +503,7 @@ function compute_gradient(cd::CovarianceCoordinateDescent{T}, XtX, coef, ipred) 
 end
 
 # Performs the cycle of all predictors
-function cycle!(coef::SparseCoefficients{T}, cd::CovarianceCoordinateDescent{T}, λ::T, all::Bool) where T
+function cycle!(coef::SparseCoefficients{T}, cd::CovarianceCoordinateDescent{T}, λ::T, all::Bool, nonneg::Bool) where T #JC
     @extractfields cd X Xty XtX Xssq α ω
 
     maxdelta = zero(T)
@@ -521,6 +523,9 @@ function cycle!(coef::SparseCoefficients{T}, cd::CovarianceCoordinateDescent{T},
             λωj = λω(λ,ω,ipred)
             _ssq = Xssq[ipred]
             newcoef = _ssq > zero(T) ? S(s, λωj*α)/(_ssq + λωj*(1 - α)) : zero(T)
+
+            nonneg && newcoef < 0 ? newcoef = zero(T) : nothing #JC
+
             if oldcoef != newcoef
                 if icoef == 0
                     # Adding a new variable to the model
@@ -545,6 +550,9 @@ function cycle!(coef::SparseCoefficients{T}, cd::CovarianceCoordinateDescent{T},
             s = Xty[ipred] + getXtX(cd, XtX, icoef, ipred)*oldcoef - compute_gradient(cd, XtX, coef, ipred)
             λωj = λω(λ,ω,ipred)
             newcoef = coef.coef[icoef] = S(s, λωj*α)/(Xssq[ipred] + λωj*(1 - α))
+
+            nonneg && newcoef < 0 ? newcoef = zero(T) : nothing #JC
+
             maxdelta = max(maxdelta, abs2(oldcoef - newcoef)*Xssq[ipred])
         end
     end
@@ -580,7 +588,7 @@ function linpred!(mu::Vector{T}, cd::CovarianceCoordinateDescent{T},
     mu
 end
 
-function cdfit!(coef::SparseCoefficients{T}, cd::CoordinateDescent{T}, λ, criterion) where T
+function cdfit!(coef::SparseCoefficients{T}, cd::CoordinateDescent{T}, λ, criterion, nonneg) where T #JC added nonneg
     maxiter = cd.maxiter
     tol = cd.tol
     n = size(cd.X, 1)
@@ -595,7 +603,7 @@ function cdfit!(coef::SparseCoefficients{T}, cd::CoordinateDescent{T}, λ, crite
     iter = 0
     for outer iter = 1:maxiter
         oldb0 = b0
-        maxdelta = cycle!(coef, cd, λ, converged)
+        maxdelta = cycle!(coef, cd, λ, converged, nonneg) #JC added nonneg
         b0 = intercept(coef, cd)
         maxdelta = max(maxdelta, abs2(oldb0 - b0)*cd.weightsum)
 
@@ -642,6 +650,7 @@ poststep(path::LassoPath, cd::CoordinateDescent, i::Int, coefs::SparseCoefficien
 function StatsBase.fit!(path::RegularizationPath{S,T}; verbose::Bool=false, irls_maxiter::Int=30,
                         cd_maxiter::Int=100000, cd_tol::Real=1e-7, irls_tol::Real=1e-7,
                         stopearly::Bool=true, # whether to break path when little change in dev and trim the λ set
+                        nonneg::Bool = false, #JC
                         criterion=:coef, minStepFac::Real=0.001) where {S<:GeneralizedLinearModel,T}
     irls_maxiter >= 1 || error("irls_maxiter must be positive")
     0 < minStepFac < 1 || error("minStepFac must be in (0, 1)")
@@ -701,7 +710,7 @@ function StatsBase.fit!(path::RegularizationPath{S,T}; verbose::Bool=false, irls
                 wrkresp!(scratchmu, eta, wrkresid, offset)
 
                 # Run coordinate descent inner loop
-                niter += cdfit!(newcoef, update!(cd, newcoef, scratchmu, wrkwt), curλ, criterion)
+                niter += cdfit!(newcoef, update!(cd, newcoef, scratchmu, wrkwt), curλ, criterion, nonneg) #JC
                 b0 = intercept(newcoef, cd)
 
                 # Update GLM and get deviance
@@ -790,6 +799,7 @@ end
 function StatsBase.fit!(path::RegularizationPath{S,T}; verbose::Bool=false,
                         cd_maxiter::Int=10000, cd_tol::Real=1e-7, irls_tol::Real=1e-7,
                         stopearly::Bool=true, # whether to break path when little change in dev and trim the λ set
+                        nonneg::Bool=false, #JC
                         criterion=:coef, minStepFac::Real=eps()) where {S<:LinearModel,T}
     0 < minStepFac < 1 || error("minStepFac must be in (0, 1)")
     criterion == :obj || criterion == :coef || error("criterion must be obj or coef")
@@ -824,7 +834,7 @@ function StatsBase.fit!(path::RegularizationPath{S,T}; verbose::Bool=false,
         curλ = λ[i]
 
         # Run coordinate descent
-        niter += cdfit!(newcoef, cd, curλ, criterion)
+        niter += cdfit!(newcoef, cd, curλ, criterion, nonneg) #JC
 
         dev_ratio = cd.dev/nulldev
         pct_dev[i] = 1 - dev_ratio

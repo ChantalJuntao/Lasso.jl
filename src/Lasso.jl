@@ -472,6 +472,7 @@ function StatsBase.fit(::Type{LassoPath},
         fit!(path; irls_tol=irls_tol, fitargs...)
     end
     path
+
 end
 
 StatsBase.nobs(path::RegularizationPath) = length(path.m.rr.y)
@@ -599,7 +600,7 @@ end
 
 "predicted values for data used to estimate `path`"
 function StatsBase.predict(path::RegularizationPath; select=AllSeg())
-    X = path.m.pp.X 
+    X = path.m.pp.X
     offset = path.m.rr.offset
 
     # destandardize X if needed
