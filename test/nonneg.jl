@@ -21,23 +21,66 @@ xnonneg = nnls(A,b)
 xlasso = fit(LassoPath,A,b; algorithm = NaiveCoordinateDescent)
 xlassononneg = fit(LassoPath, A, b; algorithm = NaiveCoordinateDescent, nonneg = true)
 
-plot(1:1:16, xneg, color = "red")
-plot(1:1:16, xnonneg, color = "blue")
+plot(1:1:16, xneg, color = "green")
+plot(1:1:16, xnonneg, color = "red")
 # plot(1:1:9, xlasso.coefs[:,40], color = "black")
-plot(1:1:16, xlasso.coefs[:,end], color = "green")
+plot(1:1:16, xlasso.coefs[:,end], color = "blue")
 plot(1:1:16, xlassononneg.coefs[:,end], color = "purple")
 
-cla()
-plot(1:1:30, b, color = "red")
-plot(1:1:30, A*xlasso.coefs[:,10], color = "orange")
-plot(1:1:30, A*xlasso.coefs[:,20], color = "yellow")
-plot(1:1:30, A*xlasso.coefs[:,30], color = "green")
 
-#λ doesn't make a lot of sense. Overfitting seems to be an issue
-plot(1:1:30, A*xnonneg, color = "blue")
-plot(1:1:30, A*xlassononneg.coefs[:,10], color = "cyan")
-plot(1:1:30, A*xlassononneg.coefs[:,20], color = "pink")
-plot(1:1:30, A*xlassononneg.coefs[:,30], color = "purple")
+cla()
+for i = 1:20
+    plot(1:1:16, xlasso.coefs[:,i], color = [0.0, 0.0, i/20])
+end
+for i = 21:40
+    plot(1:1:16, xlasso.coefs[:,i], color = [0.0, (i-20)/20, 1.0])
+end
+for i = 41:56
+    plot(1:1:16, xlasso.coefs[:,i], color = [(i-40)/20, 1.0, 1.0])
+end
+plot(1:1:16, xneg, color = "green")
+
+
+
+cla()
+for i = 1:20
+    plot(1:1:16, xlassononneg.coefs[:,i], color = [0.0, 0.0, i/20])
+end
+for i = 21:40
+    plot(1:1:16, xlassononneg.coefs[:,i], color = [0.0, (i-20)/20, 1.0])
+end
+for i = 41:57
+    plot(1:1:16, xlassononneg.coefs[:,i], color = [(i-40)/20, 1.0, 1.0])
+end
+plot(1:1:16, xnonneg, color = "red")
+
+
+#for regular lasso, smaller lamda means results that approach the best result
+cla()
+for i = 1:20
+    plot(1:1:30, A*xlasso.coefs[:,i], color = [0.0, 0.0, i/20])
+end
+for i = 21:40
+    plot(1:1:30, A*xlasso.coefs[:,i], color = [0.0, (i-20)/20, 1.0])
+end
+for i = 41:56
+    plot(1:1:30, A*xlasso.coefs[:,i], color = [(i-40)/20, 1.0, 1.0])
+end
+plot(1:1:30, A*xneg, color = "green")
+
+
+#for my nonnegative lasso implementation, the best result seems to sit in the middle
+cla()
+for i = 1:20
+    plot(1:1:30, A*xlassononneg.coefs[:,i], color = [0.0, 0.0, i/20])
+end
+for i = 21:40
+    plot(1:1:30, A*xlassononneg.coefs[:,i], color = [0.0, (i-20)/20, 1.0])
+end
+for i = 41:57
+    plot(1:1:30, A*xlassononneg.coefs[:,i], color = [(i-40)/20, 1.0, 1.0])
+end
+plot(1:1:30, A*xnonneg, color = "red")
 
 
 @test sum(abs.(xneg - xlasso.coefs[:,Int(ceil(end/2))])) >= sum(abs.(xnonneg - xlassononneg.coefs[:,Int(ceil(end/2))]))
