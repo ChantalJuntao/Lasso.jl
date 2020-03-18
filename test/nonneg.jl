@@ -1,7 +1,7 @@
 using TestImages, Images, NNLS
 
 img = testimage("pirate.tif")
-A = map(x->Float64(x.val), restrict(restrict(img))[1:30, 15:30])
+A = map(x->Float64(x.val), restrict(restrict(img))[11:40, 20:35])
 
 x = zeros(16)
 x[3] = -2
@@ -77,10 +77,13 @@ end
 for i = 21:40
     plot(1:1:30, A*xlassononneg.coefs[:,i], color = [0.0, (i-20)/20, 1.0])
 end
-for i = 41:57
-    plot(1:1:30, A*xlassononneg.coefs[:,i], color = [(i-40)/20, 1.0, 1.0])
+for i = 41:70
+    plot(1:1:30, A*xlassononneg.coefs[:,i], color = [(i-40)/30, 1.0, 1.0])
 end
 plot(1:1:30, A*xnonneg, color = "red")
+plot(1:1:30, b, color = "green")
 
 
+#It looks like the lasso solution resembles the shape of the actual solution more,
+#but doesn't resemble the result of the nonnegative solution that minimizes the residual
 @test sum(abs.(xneg - xlasso.coefs[:,Int(ceil(end/2))])) >= sum(abs.(xnonneg - xlassononneg.coefs[:,Int(ceil(end/2))]))
